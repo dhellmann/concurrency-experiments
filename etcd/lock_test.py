@@ -6,7 +6,9 @@ import time
 import etcd
 import urllib3
 
-clientid=sys.argv[-1] if len(sys.argv) > 1 else 'default'
+if len(sys.argv) <= 1:
+    raise ValueError('Please specify the client id')
+clientid=sys.argv[-1]
 print 'clientid=%r' % clientid
 
 client = etcd.Client(host='127.0.0.1', port=4001, allow_redirect=True)
@@ -43,11 +45,15 @@ for i in range(5):
         print 'Could not acquire the lock', show_lock_owner(poll_lock)
         continue
     else:
-        # Renew the lock a few times. Since we have the lock, renewing
-        # it should not fail.
+        # Renew the lock a few times. If another client has released
+        # it the renewal may fail.
         for i in range(5):
             print 'during:', show_lock_owner(poll_lock)
-            my_lock.renew(5)
+            try:
+                my_lock.renew(5)
+            except etcd.EtcdException as e:
+                if 'Key not found' not in str(e):
+                    raise
             time.sleep(1)
     finally:
         # FIXME: Need some error handling here, but it's not clear why
